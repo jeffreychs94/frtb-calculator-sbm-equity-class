@@ -1,6 +1,7 @@
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency } from '../utils/formatting';
 import { BUCKET_DESCRIPTIONS } from '../constants/regulatory';
+import BucketBarChart from './BucketBarChart';
 
 export default function SummaryDashboard() {
   const { results } = useAppContext();
@@ -24,6 +25,31 @@ export default function SummaryDashboard() {
     { label: 'Total SBM Charge', value: total, color: 'bg-green-50 border-green-200 text-green-900' },
   ];
 
+  const bucketBarData = Array.from({ length: 13 }, (_, i) => ({
+    bucket: i + 1,
+    label: BUCKET_DESCRIPTIONS[i + 1],
+  }));
+
+  const deltaBarData = bucketBarData.map((b) => ({
+    ...b,
+    value: delta.bucketResults[b.bucket - 1].Kb,
+  }));
+  const vegaBarData = bucketBarData.map((b) => ({
+    ...b,
+    value: vega.bucketResults[b.bucket - 1].Kb,
+  }));
+  const curvatureBarData = bucketBarData.map((b) => ({
+    ...b,
+    value: curvature.bucketResults[b.bucket - 1].Kb,
+  }));
+
+  // Find the bucket with the largest total Kb for highlighting
+  const bucketTotals = Array.from({ length: 13 }, (_, i) => {
+    const totalKb = delta.bucketResults[i].Kb + vega.bucketResults[i].Kb + curvature.bucketResults[i].Kb;
+    return { index: i, totalKb };
+  });
+  const maxTotalKbIndex = bucketTotals.reduce((max, b) => (b.totalKb > max.totalKb ? b : max), bucketTotals[0]).index;
+
   return (
     <div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -42,6 +68,27 @@ export default function SummaryDashboard() {
         ))}
       </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+        <BucketBarChart
+          data={deltaBarData}
+          color="blue"
+          title="Delta Kb by Bucket"
+          totalCharge={delta.totalCharge}
+        />
+        <BucketBarChart
+          data={vegaBarData}
+          color="purple"
+          title="Vega Kb by Bucket"
+          totalCharge={vega.totalCharge}
+        />
+        <BucketBarChart
+          data={curvatureBarData}
+          color="amber"
+          title="Curvature Kb by Bucket"
+          totalCharge={curvature.totalCharge}
+        />
+      </div>
+
       <h3 className="text-sm font-semibold text-gray-700 mb-2">Per-Bucket Breakdown</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
@@ -55,6 +102,7 @@ export default function SummaryDashboard() {
               <th className="px-3 py-2 text-right">Vega Sb</th>
               <th className="px-3 py-2 text-right">Curv Kb</th>
               <th className="px-3 py-2 text-right">Curv Sb</th>
+              <th className="px-3 py-2 text-right">Total Kb</th>
             </tr>
           </thead>
           <tbody>
@@ -63,11 +111,13 @@ export default function SummaryDashboard() {
               const vb = vega.bucketResults[i];
               const cb = curvature.bucketResults[i];
               const bucket = i + 1;
-              const hasData = db.Kb > 0 || vb.Kb > 0 || cb.Kb > 0;
+              const totalKb = db.Kb + vb.Kb + cb.Kb;
+              const hasData = totalKb > 0;
+              const isMax = i === maxTotalKbIndex && hasData;
               return (
                 <tr
                   key={bucket}
-                  className={`border-t border-gray-200 ${hasData ? '' : 'text-gray-300'}`}
+                  className={`border-t border-gray-200 ${hasData ? '' : 'text-gray-300'} ${isMax ? 'bg-yellow-50 font-semibold' : ''}`}
                 >
                   <td className="px-3 py-1.5 font-medium">{bucket}</td>
                   <td className="px-3 py-1.5 text-xs">{BUCKET_DESCRIPTIONS[bucket]}</td>
@@ -77,6 +127,7 @@ export default function SummaryDashboard() {
                   <td className="px-3 py-1.5 text-right font-mono">{formatCurrency(vb.Sb)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{formatCurrency(cb.Kb)}</td>
                   <td className="px-3 py-1.5 text-right font-mono">{formatCurrency(cb.Sb)}</td>
+                  <td className="px-3 py-1.5 text-right font-mono">{formatCurrency(totalKb)}</td>
                 </tr>
               );
             })}
